@@ -1,0 +1,39 @@
+---
+- name: install openmrs
+  hosts: all
+  become: true
+  become_user: root
+  tasks:
+  - name: Install java
+    apt:
+      name: openjdk-11-jdk
+      update_cache: yes
+      state: present
+  - name: download the MySQL
+    get_url:
+      url: https://dev.mysql.com/get/Downloads/MySQL-5.6/mysql-5.6.46-linux-glibc2.12-x86_64.tar.gz
+      dest: /home/devops/mysql
+  - name: create a directory
+    ansible.builtin.file:
+      path: /usr/local/mysql
+      state: directory
+      recurse: yes
+  - name: install unzip
+    ansible.builtin.apt:
+      name: unzip
+      update_cache: yes
+      state: present
+  - name: Extract MySQL
+    ansible.builtin.unarchive:
+      src: "/usr/local/mysql/mysql-5.6.46-linux-glibc2.12-x86_64.tar.gz"
+      dest: "/usr/local/mysql/"
+      remote_src: yes  
+      owner: www-data
+  - name: copying support files
+    ansible.builtin.unarchive:
+      src: "support-files/my-default.cnf"
+      dest: "/usr/local/my.conf"
+  - name: copying support files
+    ansible.builtin.unarchive:
+      src: "support-files/mysql.server"
+      dest: "/etc/init.d/mysql.server"

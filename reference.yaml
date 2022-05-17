@@ -1,0 +1,185 @@
+---
+  - name: install OpenMRS
+    become: true
+    hosts: all
+    vars:
+      - openmrs_directory:  /home/devops/openmrs/var/www/OpenMRS
+      - home_dir: /home/devops/tomcat
+      - tomcat_directory: /opt/tomcat/
+      - tomcat_latest: /home/devops/tomcat/latest
+      - mysql_bin: /usr/local/mysql
+      - username: mysql
+      - tomcat_user: tomcat
+      - default_shell: /bin/false
+    tasks:
+      - name: Update repositories cache and install
+        apt:
+          update_cache: yes
+      - name: add mysql user
+        ansible.builtin.group:
+          name: mysql
+          state: present
+      - name: Add the user with a specific uid and a primary group of 'admin'
+        ansible.builtin.user:
+          name: mysql
+          group: admin
+      - name: Download mysql
+        get_url:
+          url: "https://dev.mysql.com/get/Downloads/MySQL-5.6/mysql-5.6.46-linux-glibc2.12-x86_64.tar.gz"
+          dest: "{{ mysql_bin }}"
+      - name: Unarchive mysql
+        ansible.builtin.unarchive:
+          src: "{{ mysql_bin }}/mysql-5.6.46-linux-glibc2.12-x86_64.tar.gz"
+          dest: "{{ mysql_bin }}"
+          remote_src: yes
+      - name: Copy file with owner and permissions
+        ansible.builtin.copy:
+          src: "{{ mysql_bin }}/mysql-5.6.46-linux-glibc2.12-x86_64"
+          dest: /usr/local/mysql
+          mode: '0755'
+          remote_src: yes
+      - name: Recursively change ownership of a directory
+        ansible.builtin.file:
+          path: "{{ mysql_bin }}"
+          recurse: yes
+          state: directory
+          owner: "{{ username }}"
+          group: "{{ username }}"
+      - name: install  libaio1 libncurses5 libnuma-dev
+        apt:
+          name: "{{ item }}"
+          state: present
+        with_items:
+          - libaio1
+          - libncurses5
+          - libnuma-dev
+        notify:
+          - Install mysql
+      - name: Recursively change ownership of a mysql directory
+        ansible.builtin.file:
+          path: "{{ mysql_bin }}"
+          recurse: yes
+          state: directory
+          owner: root
+      - name: Recursively change ownership of a mysql directory
+        ansible.builtin.file:
+          path: "{{ mysql_bin }}"
+          recurse: yes
+          state: directory
+                    owner: mysql
+      - name: Copy file with owner and permissions
+        ansible.builtin.copy:
+          src: "{{ mysql_bin }}/mysql-5.6.46-linux-glibc2.12-x86_64/support-files/my-default.cnf"
+          dest: /etc/my.cnf
+          remote_src: yes
+      - name: Copy file with owner and permissions
+        ansible.builtin.copy:
+          src: "{{ mysql_bin }}/mysql-5.6.46-linux-glibc2.12-x86_64/support-files/mysql.server"
+          dest: /etc/init.d/mysql.server
+          remote_src: yes
+        notify: start the MySQL service
+      - name: create a link of the MySQL binary
+        ansible.builtin.file:
+          src: /usr/local/mysql/mysql-5.6.46-linux-glibc2.12-x86_64/bin/mysql
+          dest: /usr/local/bin/mysql
+          owner: "{{ username }}"
+          group: "{{ username }}"
+      - name: Make sure mysql.server is started
+        sysvinit:
+            name: mysql.server
+            state: started
+            enabled: yes
+      - name: reload the daemon, enable and start the mysql server
+        ansible.builtin.systemd:
+          name: 'mysql.server'
+          daemon_reload: yes
+          state: started
+      - name: install openjdk 8
+        package:
+          name: openjdk-8-jdk
+          state: present
+      - name: Create a directory if it does not exist
+        ansible.builtin.file:
+                  path: /opt/tomcat/
+          state: directory
+          mode: '0755'
+      - name: Add tomcat user
+        ansible.builtin.user:
+          name: "{{ tomcat_user }}"
+          shell: "{{ default_shell }}"
+          home: "{{ tomcat_directory }}"
+      - name: Add tomcat group
+        ansible.builtin.group:
+          name: "{{ tomcat_user }}"
+      - name: installing tomcat using wget
+        get_url:
+          url: "https://archive.apache.org/dist/tomcat/tomcat-7/v7.0.109/bin/apache-tomcat-7.0.109.tar.gz "
+          dest:  "{{ tomcat_directory }}"
+          mode: '0755'
+      - name: unzip tomcat
+        unarchive:
+          src:  "{{ tomcat_directory }}/apache-tomcat-7.0.109.tar.gz"
+          dest: "{{ tomcat_directory }}"
+          remote_src: true
+      - name: Recursively change ownership of a directory
+        ansible.builtin.file:
+          path: "{{ tomcat_directory }}"
+          recurse: yes
+          state: directory
+          owner: "{{ tomcat_user }}"
+          group: "{{ tomcat_user }}"
+          mode: '1777'
+      - name: create tomcat service file
+        ansible.builtin.file:
+          path: /etc/systemd/system/tomcat.service
+          state: touch
+          mode: '1777'
+      - name: create tomcat service file
+        ansible.builtin.file:
+          path: /etc/systemd/system/tomcat.service
+          state: touch
+          mode: '1777'
+      - name: copy tomcat service file
+        ansible.builtin.template:
+          src: 'tomcatservice.j2'
+          dest: /etc/systemd/system/tomcat.service
+          owner: "{{ tomcat_user }}"
+          group: "{{ tomcat_user }}"
+          mode: '1777'
+      - name: Create a directory if it does not exist
+        ansible.builtin.file:
+          path: /home/devops/openmrs/var/www/OpenMRS
+          state: directory
+          mode: '0755'
+      - name: Recursively change ownership of a directory
+        ansible.builtin.file:
+          path: "{{ openmrs_directory }}"
+          recurse: yes
+          state: directory
+          owner: devops
+          group: devops
+      - name: installing OpenMRS using wget
+        get_url:
+          url: "https://sourceforge.net/projects/openmrs/files/releases/OpenMRS_Platform_2.5.0/openmrs.war"
+          dest:  "{{ openmrs_directory }}"
+          mode: '0755'
+      - name: copy openmrs to tomcat
+        ansible.builtin.copy:
+          src: "{{ openmrs_directory }}/openmrs.war"
+          dest: /opt/tomcat/apache-tomcat-7.0.109/webapps/
+          owner: "{{ tomcat_user }}"
+          mode: '1777'
+          remote_src: yes
+    handlers:
+      - name: Install mysql
+        command:
+          cmd: /usr/local/mysql/mysql-5.6.46-linux-glibc2.12-x86_64/scripts/mysql_install_db --user=mysql
+      - name: start the MYSQL service
+        command:
+          chdir: /usr/local/mysql/mysql-5.6.46-linux-glibc2.12-x86_64
+          cmd: bin/mysqld_safe --user=mysql & bin/mysqladmin -u root password newpassword
+      - name: daemon reload and start tomcat service
+        ansible.builtin.systemd:
+          name: tomcat
+          state: started
+          daemon_reload: yes    
